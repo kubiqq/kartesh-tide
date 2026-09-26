@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M2 18c4-6 8-6 12 0s8 6 12 0 4-4 4-4v16H2z' fill='%231D5F7A'/%3E%3C/svg%3E">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Прилив у Картеша</title>
+<meta name="description" content="Уровень моря и прогноз прилива у мыса Картеш (губа Чупа, Белое море)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&display=swap&subset=cyrillic">
+<style>
+:root {
+  --ground: #EEF2F0;
+  --surface: #F8FAF8;
+  --ink: #13232A;
+  --muted: #5B6C70;
+  --line: #CFD9D7;
+  --water: #1D5F7A;
+  --water-soft: rgba(29, 95, 122, 0.14);
+  --night: rgba(19, 35, 42, 0.06);
+  --mark: #A4286F;        /* магента морских карт */
+  --rise: #2B7A57;
+  --moon: #F3E7B8;
+  --moon-dark: #3A4A50;
+  --fall: #9A5A1C;
+  --body: "Onest", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0D161A; --surface: #13212780; --ink: #E2EBEA; --muted: #8FA3A6;
+    --line: #26383E; --water: #62B4D1; --water-soft: rgba(98, 180, 209, 0.16);
+    --night: rgba(0, 0, 0, 0.28); --mark: #E37DBA; --rise: #6CC39A; --fall: #E0A060; --moon: #EADFAE; --moon-dark: #24343A;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0D161A; --surface: #13212780; --ink: #E2EBEA; --muted: #8FA3A6;
+  --line: #26383E; --water: #62B4D1; --water-soft: rgba(98, 180, 209, 0.16);
+  --night: rgba(0, 0, 0, 0.28); --mark: #E37DBA; --rise: #6CC39A; --fall: #E0A060; --moon: #EADFAE; --moon-dark: #24343A;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--ground); color: var(--ink);
+  font: 15px/1.55 var(--body);
+  font-variant-numeric: tabular-nums;
+  padding-inline: 16px; padding-block: 20px 48px;
+}
+.wrap { max-width: 1060px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+.wrap > * { min-width: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overflow-x: hidden; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+header.top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 8px 24px;
+  border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+header.top h1 { font: 600 clamp(28px, 5vw, 40px)/1.1 var(--body); margin: 4px 0 0; text-wrap: balance; }
+header.top .clock { text-align: right; }
+header.top .clock b { font: 500 22px/1.2 var(--body); display: block; }
+
+.hero { display: grid; grid-template-columns: auto 1fr 1fr; gap: 20px 32px; align-items: stretch; }
+.gauge { width: 76px; }
+.now { display: grid; align-content: center; gap: 10px; }
+.now .level { font: 500 clamp(56px, 11vw, 88px)/1 var(--body); letter-spacing: -.02em; }
+.now .level small { font: 400 .32em var(--body); color: var(--muted); margin-left: 6px; letter-spacing: 0; }
+.chip { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 5px 12px;
+  font-weight: 600; font-size: 14px; width: fit-content; }
+.chip.rise { color: var(--rise); background: color-mix(in srgb, var(--rise) 13%, transparent); }
+.chip.fall { color: var(--fall); background: color-mix(in srgb, var(--fall) 13%, transparent); }
+.chip .rate { font: 500 13px var(--body); opacity: .85; }
+.now p { margin: 0; color: var(--muted); max-width: 34ch; }
+
+.next { display: grid; gap: 12px; align-content: center; }
+.ev { display: grid; grid-template-columns: 1fr auto; gap: 2px 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.ev:last-child { border-bottom: 1px solid var(--line); }
+.ev .k { font-size: 13px; color: var(--muted); }
+.ev .t { font: 500 26px/1.15 var(--body); }
+.ev .h { font: 500 18px/1.15 var(--body); text-align: right; align-self: end; }
+.ev .in { font-size: 13px; color: var(--muted); text-align: right; }
+
+section.panel h2 { font: 600 20px/1.25 var(--body); margin: 0; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-bottom: 10px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button, input[type=date] {
+  font: 500 14px var(--body); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+button[aria-pressed="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+.chart { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.chart svg { display: block; width: 100%; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
+
+.days { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 10px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-weight: 500; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+td.date { white-space: nowrap; }
+td.date b { font-weight: 600; }
+td.date span { color: var(--muted); font-size: 13px; margin-left: 6px; }
+tr.today td { background: var(--water-soft); }
+.evs { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 14px var(--body); }
+.evs span { white-space: nowrap; }
+.evs .hw { color: var(--water); font-weight: 500; }
+.evs .lw { color: var(--muted); }
+tr.pick { cursor: pointer; }
+tr.pick:hover td { background: color-mix(in srgb, var(--water) 8%, transparent); }
+
+
+@media (max-width: 720px) {
+  .hero { grid-template-columns: auto 1fr; }
+  .next { grid-column: 1 / -1; }
+  th, td { padding: 9px 6px; }
+  td.date span { display: block; margin-left: 0; }
+  .evs { flex-direction: column; gap: 2px; font-size: 13.5px; }
+  header.top .clock { text-align: left; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Мыс Картеш · губа Чупа · Белое море</div>
+      <h1>Прилив у Картеша</h1>
+      <div class="mono" style="color:var(--muted);font-size:13px">66°20′ с.ш. 33°39′ в.д. · опорный пункт Кемь-порт</div>
+    </div>
+    <div class="clock">
+      <span class="eyebrow">Московское время</span>
+      <b id="clock">--:--</b>
+      <span id="today" style="color:var(--muted);font-size:13px"></span>
+    </div>
+  </header>
+
+  <section class="hero" aria-label="Текущий уровень">
+    <svg class="gauge" id="gauge" viewBox="0 0 76 300" role="img" aria-label="Футшток: текущий уровень"></svg>
+    <div class="now">
+      <span class="eyebrow">Уровень сейчас</span>
+      <div class="level"><span id="lvl" class="mono">—</span><small>м</small></div>
+      <span class="chip" id="state"></span>
+    </div>
+    <div class="next" id="next"></div>
+  </section>
+
+  <section class="panel">
+    <div class="bar">
+      <h2 id="chartTitle">Ближайшие двое суток</h2>
+      <div class="controls">
+        <button type="button" id="btnNow" aria-pressed="true">Сейчас</button>
+        <label class="eyebrow" for="day" style="margin-left:6px">Дата</label>
+        <input type="date" id="day">
+      </div>
+    </div>
+    <div class="chart" id="chart"></div>
+    <div class="legend">
+      <span><i style="background:var(--water)"></i>уровень, м</span>
+      <span><i style="background:var(--night);border:1px solid var(--line)"></i>солнце за горизонтом</span>
+      <span><i style="background:var(--mark)"></i>текущий момент</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="bar"><h2>Полные и малые воды на неделю</h2><span class="eyebrow">нажмите на день, чтобы открыть график</span></div>
+    <div class="days"><table>
+      <thead><tr><th>День</th><th>Луна</th><th>Полная вода</th><th>Малая вода</th></tr></thead>
+      <tbody id="week"></tbody>
+    </table></div>
+  </section>
+
+</div>
+
+<script>
+// ---------- расчёт прилива (Кемь-порт + поправки на Картеш) ----------
+const TIDE = (() => {
+  const D2R = Math.PI / 180;
+  const CONST = {
+    K1: [0.068, 109], K2: [0.039, 200.8], L2: [0.017, 193], M2: [0.586, 150],
+    M4: [0.048, 234], N2: [0.118, 107], "2N2": [0.016, 64], O1: [0.006, 352],
+    P1: [0.023, 100.2], Q1: [0.010, 212], R2: [0.001, 198.9], S2: [0.144, 197],
+    T2: [0.008, 195.1], LDA2: [0.004, 171.8], MU2: [0.014, 103], NU2: [0.023, 112.8],
+    MS4: [0.024, 238], SA: [0.056, 143]
+  };
+  const CFG = {
+    z0: 1.1, zoneHours: 3,
+    hwOffsetMin: -63, lwOffsetMin: -39,
+    heightOffset: -0.3 * 0.3048, rangeFactor: 1.0
+  };
+  function astro(ms) {
+    const T = (ms / 86400000 + 2440587.5 - 2451545.0) / 36525;
+    const hoursUT = ((ms / 3600000) % 24 + 24) % 24;
+    return {
+      s: 218.3164477 + 481267.88123421 * T, h: 280.46646 + 36000.76983 * T,
+      p: 83.3532465 + 4069.0137287 * T, N: 125.04452 - 1934.136261 * T,
+      p1: 282.93735 + 1.71946 * T, T: 180 + 15 * hoursUT
+    };
+  }
+  function V(n, a) {
+    const { s, h, p, p1, T } = a;
+    switch (n) {
+      case "K1": return T + h - 90;           case "O1": return T - 2 * s + h + 90;
+      case "P1": return T - h + 90;           case "Q1": return T - 3 * s + h + p + 90;
+      case "M2": return 2 * T - 2 * s + 2 * h; case "S2": return 2 * T;
+      case "N2": return 2 * T - 3 * s + 2 * h + p; case "K2": return 2 * T + 2 * h;
+      case "2N2": return 2 * T - 4 * s + 2 * h + 2 * p; case "MU2": return 2 * T - 4 * s + 4 * h;
+      case "NU2": return 2 * T - 3 * s + 4 * h - p; case "LDA2": return 2 * T - s + p + 180;
+      case "L2": return 2 * T - s + 2 * h - p + 180; case "T2": return 2 * T - h + p1;
+      case "R2": return 2 * T + h - p1 + 180; case "M4": return 2 * V("M2", a);
+      case "MS4": return V("M2", a) + V("S2", a); case "SA": return h;
+    }
+    return 0;
+  }
+  function nodal(Nd) {
+    const N = Nd * D2R, c = Math.cos, sn = Math.sin;
+    const fM2 = 1.0004 - 0.0373 * c(N) + 0.0002 * c(2 * N), uM2 = -2.14 * sn(N);
+    const m2 = [fM2, uM2];
+    const o1 = [1.0089 + 0.1871 * c(N) - 0.0147 * c(2 * N) + 0.0014 * c(3 * N),
+                10.80 * sn(N) - 1.34 * sn(2 * N) + 0.19 * sn(3 * N)];
+    return {
+      M2: m2, N2: m2, "2N2": m2, MU2: m2, NU2: m2, LDA2: m2, L2: m2, MS4: m2, O1: o1, Q1: o1,
+      K1: [1.0060 + 0.1150 * c(N) - 0.0088 * c(2 * N) + 0.0006 * c(3 * N),
+           -8.86 * sn(N) + 0.68 * sn(2 * N) - 0.07 * sn(3 * N)],
+      K2: [1.0241 + 0.2863 * c(N) + 0.0083 * c(2 * N) - 0.0015 * c(3 * N),
+           -17.74 * sn(N) + 0.68 * sn(2 * N) - 0.04 * sn(3 * N)],
+      M4: [fM2 * fM2, 2 * uM2], SA: [1, 0],
+      S2: [1, 0], P1: [1, 0], T2: [1, 0], R2: [1, 0]
+    };
+  }
+  function kemLevel(ms, nod) {
+    const a = astro(ms + CFG.zoneHours * 3600000);
+    nod = nod || nodal(a.N);
+    let z = CFG.z0;
+    for (const k in CONST) {
+      const [A, g] = CONST[k], [f, u] = nod[k];
+      z += f * A * Math.cos((V(k, a) + u - g) * D2R);
+    }
+    return z;
+  }
+  function series(t0, t1, stepMin) {
+    const pad = 14 * 3600000, st = 60000;
+    const nod = nodal(astro((t0 + t1) / 2).N);
+    const kt = [], kz = [];
+    for (let t = Math.floor((t0 - pad) / st) * st; t <= t1 + pad; t += st) { kt.push(t); kz.push(kemLevel(t, nod)); }
+    const ext = [];
+    for (let i = 1; i < kz.length - 1; i++) {
+      if (kz[i] > kz[i - 1] && kz[i] >= kz[i + 1]) ext.push({ i, hw: true });
+      else if (kz[i] < kz[i - 1] && kz[i] <= kz[i + 1]) ext.push({ i, hw: false });
+    }
+    let mean = 0; for (const z of kz) mean += z; mean /= kz.length;
+    const adj = z => mean + (z - mean) * CFG.rangeFactor + CFG.heightOffset;
+    const off = new Float64Array(kz.length).fill(NaN);
+    for (let e = 0; e < ext.length; e++) {
+      const o = (ext[e].hw ? CFG.hwOffsetMin : CFG.lwOffsetMin) * 60000;
+      off[ext[e].i] = o;
+      if (e + 1 < ext.length) {
+        const o2 = (ext[e + 1].hw ? CFG.hwOffsetMin : CFG.lwOffsetMin) * 60000;
+        const i1 = ext[e].i, i2 = ext[e + 1].i;
+        for (let i = i1 + 1; i < i2; i++) off[i] = o + (o2 - o) * (i - i1) / (i2 - i1);
+      }
+    }
+    const mt = [], mz = [];
+    for (let i = 0; i < kz.length; i++) if (!isNaN(off[i])) { mt.push(kt[i] + off[i]); mz.push(adj(kz[i])); }
+    const points = []; let j = 0;
+    for (let t = t0; t <= t1; t += stepMin * 60000) {
+      while (j < mt.length - 2 && mt[j + 1] < t) j++;
+      const w = (t - mt[j]) / (mt[j + 1] - mt[j]);
+      points.push({ t, z: mz[j] + (mz[j + 1] - mz[j]) * w });
+    }
+    const extremes = [];
+    for (const e of ext) {
+      const t = kt[e.i] + off[e.i];
+      if (!isNaN(t) && t >= t0 && t <= t1) extremes.push({ t, z: adj(kz[e.i]), hw: e.hw });
+    }
+    return { points, extremes };
+  }
+  return { series, astro };
+})();
+
+// ---------- время, солнце, луна ----------
+const H = 3600000, MSK = 3 * H;
+const pad2 = n => String(n).padStart(2, "0");
+const mskDate = ms => new Date(ms + MSK);
+const fmtTime = ms => { const d = mskDate(ms); return pad2(d.getUTCHours()) + ":" + pad2(d.getUTCMinutes()); };
+const dayKey = ms => mskDate(ms).toISOString().slice(0, 10);
+const midnightMSK = ms => { const d = mskDate(ms); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - MSK; };
+const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+const MON = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const fmtDay = ms => { const d = mskDate(ms); return d.getUTCDate() + " " + MON[d.getUTCMonth()]; };
+const fmtM = z => z.toFixed(2).replace(".", ",");
+const fmtDur = m => { m = Math.round(m); const h = Math.floor(m / 60); return (h ? h + " ч " : "") + (m % 60) + " мин"; };
+
+const LAT = 66.337, LON = 33.65;
+function sunAlt(ms) {
+  const d = ms / 86400000 + 2440587.5 - 2451545.0, r = Math.PI / 180;
+  const g = (357.529 + 0.98560028 * d) * r, q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * r, e = (23.439 - 0.00000036 * d) * r;
+  const dec = Math.asin(Math.sin(e) * Math.sin(L));
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));
+  const gmst = (280.46061837 + 360.98564736629 * d) * r;
+  const ha = gmst + LON * r - ra;
+  return Math.asin(Math.sin(LAT * r) * Math.sin(dec) + Math.cos(LAT * r) * Math.cos(dec) * Math.cos(ha)) / r;
+}
+function moonElong(ms) { const a = TIDE.astro(ms); return ((a.s - a.h) % 360 + 360) % 360; }
+function moonSVG(ms, size) {
+  const D = moonElong(ms), r = size / 2 - 1, c = size / 2;
+  const k = Math.cos(D * Math.PI / 180), rx = Math.abs(k) * r;
+  const waxing = D < 180;
+  // освещённая часть: полукруг со стороны света + эллипс-терминатор
+  const sweepOuter = waxing ? 1 : 0;
+  const sweepInner = (k > 0) === waxing ? 0 : 1;
+  const d = `M${c},${c - r} A${r},${r} 0 0 ${sweepOuter} ${c},${c + r} A${rx},${r} 0 0 ${sweepInner} ${c},${c - r}Z`;
+  const names = ["новолуние", "растущая", "первая четверть", "растущая", "полнолуние", "убывающая", "последняя четверть", "убывающая"];
+  const name = names[Math.round(D / 45) % 8];
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${name}"><title>${name}</title>
+    <circle cx="${c}" cy="${c}" r="${r}" fill="var(--moon-dark)" stroke="var(--muted)" stroke-width="0.6"/>
+    <path d="${d}" fill="var(--moon)"/></svg>`;
+}
+
+// ---------- отрисовка ----------
+let viewDay = null; // null = режим "сейчас", иначе полночь МСК выбранного дня (UTC ms)
+
+function renderNow(now) {
+  document.getElementById("clock").textContent = fmtTime(now);
+  const wd = WD[mskDate(now).getUTCDay()];
+  document.getElementById("today").textContent = wd + ", " + fmtDay(now) + " " + mskDate(now).getUTCFullYear();
+
+  const s = TIDE.series(now - 14 * H, now + 30 * H, 1);
+  const i = s.points.findIndex(p => p.t >= now);
+  const z = s.points[i].z, rate = (s.points[i + 15].z - s.points[i - 15].z) * 2; // м/ч
+  document.getElementById("lvl").textContent = fmtM(z);
+  const nx = s.extremes.filter(e => e.t > now);
+  const nextEv = nx[0];
+  const rising = nextEv ? nextEv.hw : rate > 0;
+  const st = document.getElementById("state");
+  st.className = "chip " + (rising ? "rise" : "fall");
+  st.innerHTML = (rising ? "↑ Прилив" : "↓ Отлив") + ` <span class="rate">${rate >= 0 ? "+" : "−"}${Math.abs(rate * 100).toFixed(0)} см/ч</span>`;
+
+  const hw = nx.find(e => e.hw), lw = nx.find(e => !e.hw);
+  const evs = [hw, lw].filter(Boolean).sort((a, b) => a.t - b.t);
+  document.getElementById("next").innerHTML = evs.map(e => `
+    <div class="ev">
+      <span class="k">${e.hw ? "Следующая полная вода" : "Следующая малая вода"}</span><span class="in">через ${fmtDur((e.t - now) / 60000)}</span>
+      <span class="t">${fmtTime(e.t)}${dayKey(e.t) !== dayKey(now) ? ' <span style="font-size:14px;color:var(--muted)">завтра</span>' : ""}</span><span class="h">${fmtM(e.z)} м</span>
+    </div>`).join("");
+
+  // футшток: сегодняшние пределы
+  const day0 = midnightMSK(now), ds = TIDE.series(day0, day0 + 24 * H, 10);
+  const dz = ds.points.map(p => p.z);
+  drawGauge(z, Math.min(...dz), Math.max(...dz), rising);
+}
+
+function drawGauge(z, zmin, zmax, rising) {
+  const top = 12, bot = 288, lo = 0, hi = 2.2;
+  const y = v => bot - (v - lo) / (hi - lo) * (bot - top);
+  let g = `<rect x="30" y="${top}" width="18" height="${bot - top}" fill="var(--surface)" stroke="var(--line)"/>`;
+  g += `<rect x="30" y="${y(z)}" width="18" height="${bot - y(z)}" fill="var(--water)" opacity="0.85"/>`;
+  for (let v = 0; v <= hi + 1e-9; v += 0.1) {
+    const major = Math.abs(v * 2 - Math.round(v * 2)) < 1e-6;
+    g += `<line x1="${major ? 22 : 26}" x2="30" y1="${y(v)}" y2="${y(v)}" stroke="var(--muted)" stroke-width="${major ? 1 : 0.6}"/>`;
+    if (major) g += `<text x="19" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="Onest, sans-serif">${v.toFixed(1).replace(".", ",")}</text>`;
+  }
+  // пределы дня
+  g += `<rect x="50" y="${y(zmax)}" width="4" height="${y(zmin) - y(zmax)}" fill="var(--water-soft)" stroke="var(--water)" stroke-width="0.6"/>`;
+  g += `<path d="M48,${y(z)} l10,-6 v12 z" fill="var(--mark)"/>`;
+  g += `<text x="62" y="${y(zmax) + 4}" font-size="9" fill="var(--muted)" font-family="Onest, sans-serif">ПВ</text>`;
+  g += `<text x="62" y="${y(zmin) + 4}" font-size="9" fill="var(--muted)" font-family="Onest, sans-serif">МВ</text>`;
+  document.getElementById("gauge").innerHTML = g;
+}
+
+function renderChart(now) {
+  const box = document.getElementById("chart");
+  const W = Math.max(280, Math.round(box.clientWidth || 900)), narrow = W < 560, Ht = narrow ? 300 : 320;
+  const t0 = viewDay == null ? now - (narrow ? 4 : 12) * H : viewDay, t1 = viewDay == null ? now + (narrow ? 22 : 36) * H : viewDay + 24 * H;
+  document.getElementById("chartTitle").textContent = viewDay == null ? "Ближайшие двое суток" : "График на " + fmtDay(viewDay);
+  const s = TIDE.series(t0, t1, 5);
+  const m = { l: narrow ? 36 : 44, r: 14, t: narrow ? 40 : 26, b: 34 };
+  const zlo = narrow ? -0.3 : 0, zhi = 2.2;
+  const x = t => m.l + (t - t0) / (t1 - t0) * (W - m.l - m.r);
+  const y = z => Ht - m.b - (z - zlo) / (zhi - zlo) * (Ht - m.t - m.b);
+  let g = "";
+  // ночь
+  let nightStart = null;
+  for (let t = t0; t <= t1 + 1; t += 10 * 60000) {
+    const dark = sunAlt(t) < -0.833;
+    if (dark && nightStart == null) nightStart = t;
+    if ((!dark || t >= t1) && nightStart != null) {
+      g += `<rect x="${x(nightStart)}" y="${m.t}" width="${x(Math.min(t, t1)) - x(nightStart)}" height="${Ht - m.t - m.b}" fill="var(--night)"/>`;
+      nightStart = null;
+    }
+  }
+  // сетка по высоте
+  for (let v = 0; v <= zhi + 1e-9; v += 0.5) {
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/>`;
+    g += `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="Onest, sans-serif">${v.toFixed(1).replace(".", ",")}</text>`;
+  }
+  // сетка по времени
+  const stepH = (t1 - t0) / H > 30 ? (W < 560 ? 12 : 6) : (W < 560 ? 6 : 3);
+  const firstTick = Math.ceil((t0 + MSK) / (stepH * H)) * stepH * H - MSK;
+  for (let t = firstTick; t <= t1; t += stepH * H) {
+    const d = mskDate(t), midnight = d.getUTCHours() === 0;
+    g += `<line x1="${x(t)}" x2="${x(t)}" y1="${m.t}" y2="${Ht - m.b}" stroke="var(--line)" stroke-width="${midnight ? 1.4 : 0.7}" ${midnight ? "" : 'stroke-dasharray="2 4"'}/>`;
+    g += `<text x="${x(t)}" y="${Ht - m.b + 16}" text-anchor="middle" font-size="11" fill="${midnight ? "var(--ink)" : "var(--muted)"}" font-family="Onest, sans-serif">${midnight ? d.getUTCDate() + "." + pad2(d.getUTCMonth() + 1) : pad2(d.getUTCHours()) + ":00"}</text>`;
+  }
+  // кривая
+  const pts = s.points.map(p => `${x(p.t).toFixed(1)},${y(p.z).toFixed(1)}`);
+  g += `<path d="M${pts[0].split(",")[0]},${y(zlo)} L${pts.join(" L")} L${pts[pts.length - 1].split(",")[0]},${y(zlo)} Z" fill="var(--water-soft)"/>`;
+  g += `<path d="M${pts.join(" L")}" fill="none" stroke="var(--water)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  // экстремумы
+  for (const e of s.extremes) {
+    const ex = x(e.t), ey = y(e.z);
+    if (ex < m.l + 16 || ex > W - m.r - 16) continue;
+    g += `<circle cx="${ex}" cy="${ey}" r="3.5" fill="${e.hw ? "var(--water)" : "var(--surface)"}" stroke="var(--water)" stroke-width="1.6"/>`;
+    if (narrow) {
+      const ty = e.hw ? ey - 22 : ey + 18;
+      g += `<text x="${ex}" y="${ty}" text-anchor="middle" font-size="11" fill="var(--ink)" font-family="Onest, sans-serif">${fmtTime(e.t)}<tspan x="${ex}" dy="12" fill="var(--muted)">${fmtM(e.z)}</tspan></text>`;
+    } else {
+      const ty = e.hw ? ey - 10 : ey + 18;
+      g += `<text x="${ex}" y="${ty}" text-anchor="middle" font-size="11.5" fill="var(--ink)" font-family="Onest, sans-serif">${fmtTime(e.t)} · ${fmtM(e.z)}</text>`;
+    }
+  }
+  // сейчас
+  if (now >= t0 && now <= t1) {
+    const nz = s.points.reduce((a, p) => Math.abs(p.t - now) < Math.abs(a.t - now) ? p : a).z;
+    g += `<line x1="${x(now)}" x2="${x(now)}" y1="${m.t - 8}" y2="${Ht - m.b}" stroke="var(--mark)" stroke-width="1.6"/>`;
+    g += `<circle cx="${x(now)}" cy="${y(nz)}" r="5" fill="var(--mark)" stroke="var(--surface)" stroke-width="2"/>`;
+    g += `<text x="${x(now) + 6}" y="${m.t - 12}" font-size="11" fill="var(--mark)" font-family="Onest, sans-serif" font-weight="600">${fmtTime(now)}</text>`;
+  }
+  g += `<text x="${m.l - 8}" y="${m.t - 12}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="Onest, sans-serif">м</text>`;
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="График уровня моря">${g}</svg>`;
+}
+
+function renderWeek(now) {
+  const d0 = midnightMSK(now);
+  const s = TIDE.series(d0, d0 + 7 * 24 * H, 30);
+  const rows = [];
+  for (let k = 0; k < 7; k++) {
+    const a = d0 + k * 24 * H, b = a + 24 * H;
+    const ev = s.extremes.filter(e => e.t >= a && e.t < b);
+    const hw = ev.filter(e => e.hw), lw = ev.filter(e => !e.hw);
+    rows.push({ a, hw, lw });
+  }
+  const sel = viewDay;
+  document.getElementById("week").innerHTML = rows.map((r, k) => `
+    <tr class="pick ${k === 0 ? "today" : ""}" data-day="${r.a}" tabindex="0" ${sel === r.a ? 'aria-current="date"' : ""}>
+      <td class="date"><b>${k === 0 ? "Сегодня" : k === 1 ? "Завтра" : WD[mskDate(r.a).getUTCDay()]}</b><span>${fmtDay(r.a)}</span></td>
+      <td>${moonSVG(r.a + 12 * H, 20)}</td>
+      <td><div class="evs">${r.hw.map(e => `<span class="hw">${fmtTime(e.t)} <small>${fmtM(e.z)}</small></span>`).join("")}</div></td>
+      <td><div class="evs">${r.lw.map(e => `<span class="lw">${fmtTime(e.t)} <small>${fmtM(e.z)}</small></span>`).join("")}</div></td>
+    </tr>`).join("");
+}
+
+function renderAll() {
+  const now = Date.now();
+  renderNow(now); renderChart(now); renderWeek(now);
+}
+
+// ---------- управление ----------
+const dayInput = document.getElementById("day");
+const btnNow = document.getElementById("btnNow");
+function setView(dayMs) {
+  viewDay = dayMs;
+  btnNow.setAttribute("aria-pressed", dayMs == null ? "true" : "false");
+  dayInput.value = dayMs == null ? "" : dayKey(dayMs);
+  renderChart(Date.now());
+}
+btnNow.addEventListener("click", () => setView(null));
+dayInput.addEventListener("change", () => {
+  if (!dayInput.value) return setView(null);
+  const [yy, mm, dd] = dayInput.value.split("-").map(Number);
+  setView(Date.UTC(yy, mm - 1, dd) - MSK);
+});
+document.getElementById("week").addEventListener("click", e => {
+  const tr = e.target.closest("tr[data-day]"); if (tr) { setView(+tr.dataset.day); document.getElementById("chart").scrollIntoView({ behavior: "smooth", block: "center" }); }
+});
+document.getElementById("week").addEventListener("keydown", e => {
+  if (e.key === "Enter") { const tr = e.target.closest("tr[data-day]"); if (tr) setView(+tr.dataset.day); }
+});
+let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => renderChart(Date.now()), 150); });
+
+renderAll();
+setInterval(renderAll, 60000);
+</script>
+</body>
+</html>
