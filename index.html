@@ -109,6 +109,31 @@ tr.pick { cursor: pointer; }
 tr.pick:hover td { background: color-mix(in srgb, var(--water) 8%, transparent); }
 
 
+.batch { display: grid; gap: 12px; }
+.batch p { margin: 0; color: var(--muted); max-width: 70ch; }
+.batch textarea {
+  width: 100%; min-height: 120px; resize: vertical; font: 13px/1.45 var(--body);
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+}
+.batch textarea:focus-visible, .batch select:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+.batch .opts { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: end; }
+.batch .opts label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.batch select {
+  font: 500 14px var(--body); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 100%;
+}
+.batch .file { position: relative; overflow: hidden; display: inline-block; }
+.batch .file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.batch .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.batch .primary { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+.batch .status { font-size: 13px; color: var(--muted); }
+.batch .status.err { color: var(--fall); }
+.batch .out { overflow-x: auto; }
+.batch .out table { font-size: 13px; }
+.batch .out th, .batch .out td { padding: 6px 8px; white-space: nowrap; }
+.batch .out td.new { color: var(--water); font-weight: 500; }
+.batch ul.errs { margin: 0; padding-left: 18px; font-size: 13px; color: var(--fall); }
+
 @media (max-width: 720px) {
   .hero { grid-template-columns: auto 1fr; }
   .next { grid-column: 1 / -1; }
@@ -169,6 +194,29 @@ tr.pick:hover td { background: color-mix(in srgb, var(--water) 8%, transparent);
     </table></div>
   </section>
 
+
+
+  <section class="panel batch" id="batch">
+    <div class="bar"><h2>Расчёт для своих дат</h2></div>
+    <p>Загрузите таблицу или вставьте её из Excel. В ней должны быть дата и время: в одном столбце (<b>26.09.2026 14:30</b>) или в двух соседних. Если есть столбец <b>ID</b> (или <b>№</b>), номера возьмутся из него, иначе строки пронумеруются по порядку. Результат: ID, дата и время, высота прилива и фаза (прилив или отлив).</p>
+    <div class="actions">
+      <span class="file"><button type="button" tabindex="-1">Выбрать файл</button><input type="file" id="bFile" accept=".csv,.txt,.tsv,.xlsx,.xls" aria-label="Выбрать файл с датами"></span>
+      <span class="status" id="bFileName">CSV, TXT или Excel</span>
+    </div>
+    <textarea id="bText" spellcheck="false" aria-label="Таблица с датами и временем" placeholder="Дата;Время;Станция&#10;26.09.2026;09:00;D-1&#10;26.09.2026;15:30;D-1&#10;27.09.2026;11:15;D-2"></textarea>
+    <div class="opts">
+      <label for="bTz">Время в таблице
+        <select id="bTz"></select>
+      </label>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary" id="bRun">Рассчитать</button>
+      <button type="button" id="bSave" hidden>Скачать CSV</button>
+      <span class="status" id="bStatus" role="status"></span>
+    </div>
+    <ul class="errs" id="bErrs" hidden></ul>
+    <div class="out" id="bOut"></div>
+  </section>
 </div>
 
 <script>
@@ -477,6 +525,193 @@ document.getElementById("week").addEventListener("keydown", e => {
   if (e.key === "Enter") { const tr = e.target.closest("tr[data-day]"); if (tr) setView(+tr.dataset.day); }
 });
 let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => renderChart(Date.now()), 150); });
+
+// ---------- расчёт для таблицы пользователя ----------
+(() => {
+  const $ = id => document.getElementById(id);
+  // В Android-приложении загрузка файлов не подключена — блок скрыт.
+  if (/KarteshTide/.test(navigator.userAgent)) { $("batch").hidden = true; return; }
+
+  const tz = $("bTz");
+  for (let o = -12; o <= 14; o++) {
+    const opt = document.createElement("option");
+    opt.value = o;
+    opt.textContent = o === 0 ? "UTC" : "UTC" + (o > 0 ? "+" : "−") + Math.abs(o) + (o === 3 ? " (МСК)" : "");
+    if (o === 3) opt.selected = true;
+    tz.appendChild(opt);
+  }
+
+  let rows = null, result = null;
+  const plural = (n, f) => f[(n % 10 === 1 && n % 100 !== 11) ? 0 : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 1 : 2];   // rows: массив массивов строк; result: для экспорта
+
+  // --- разбор ---
+  const excelSerial = v => {        // число Excel -> {y,m,d,h,mi,s} или время
+    const ms = Math.round((v - 25569) * 86400000 / 1000) * 1000, d = new Date(ms);
+    return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), h: d.getUTCHours(), mi: d.getUTCMinutes(), s: d.getUTCSeconds(), hasTime: v % 1 !== 0 };
+  };
+  function parseDate(str) {
+    let m = str.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{2}|\d{4})$/);
+    if (m) return { d: +m[1], m: +m[2], y: m[3].length === 2 ? 2000 + +m[3] : +m[3] };
+    m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return { y: +m[1], m: +m[2], d: +m[3] };
+    return null;
+  }
+  function parseTime(v) {
+    if (typeof v === "number") { if (v >= 0 && v < 1) { const e = excelSerial(25569 + v); return { h: e.h, mi: e.mi, s: e.s }; } return null; }
+    const m = String(v).trim().match(/^(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?$/);
+    if (!m || +m[1] > 24 || +m[2] > 59) return null;
+    return { h: +m[1], mi: +m[2], s: m[3] ? +m[3] : 0 };
+  }
+  function parseDateCell(v) {       // -> {y,m,d, time|null}
+    if (typeof v === "number") {
+      if (v < 18264 || v > 73051) return null;       // 1950–2100
+      const e = excelSerial(v);
+      return { y: e.y, m: e.m, d: e.d, time: e.hasTime ? { h: e.h, mi: e.mi, s: e.s } : null };
+    }
+    const s = String(v).trim().replace(/\s+/g, " ");
+    const [dp, tp] = s.split(/[ T]/);
+    const d = parseDate(dp || "");
+    if (!d || d.y < 1950 || d.y > 2100 || d.m < 1 || d.m > 12 || d.d < 1 || d.d > 31) return null;
+    if (tp) { const t = parseTime(tp.replace(/Z$/, "")); if (!t) return null; d.time = t; } else d.time = null;
+    return d;
+  }
+  function splitText(text) {
+    const lines = text.replace(/\r/g, "").split("\n").filter(l => l.trim() !== "");
+    if (!lines.length) return [];
+    const head = lines.slice(0, 5).join("\n");
+    const sep = head.includes("\t") ? "\t" : head.includes(";") ? ";" : ",";
+    return lines.map(l => l.split(sep).map(c => c.trim().replace(/^"(.*)"$/, "$1")));
+  }
+  // Найти столбцы даты/времени по первой строке с датой.
+  function detect(rs) {
+    for (let r = 0; r < Math.min(rs.length, 5); r++) {
+      for (let c = 0; c < rs[r].length; c++) {
+        const d = parseDateCell(rs[r][c]);
+        if (!d) continue;
+        if (d.time) return { header: r > 0, first: r, dc: c, tc: -1 };
+        if (c + 1 < rs[r].length && parseTime(rs[r][c + 1])) return { header: r > 0, first: r, dc: c, tc: c + 1 };
+      }
+    }
+    return null;
+  }
+
+  // --- расчёт ---
+  async function compute(items, onProgress) {
+    const order = items.map((it, i) => i).sort((a, b) => items[a].t - items[b].t);
+    const out = new Array(items.length);
+    let k = 0;
+    while (k < order.length) {
+      const start = items[order[k]].t;
+      let e = k;
+      while (e + 1 < order.length && items[order[e + 1]].t - start < 5 * 24 * H) e++;
+      const t0 = Math.floor((start - 8 * H) / 60000) * 60000, t1 = items[order[e]].t + 8 * H;
+      const s = TIDE.series(t0, t1, 1), ex = s.extremes;
+      for (let q = k; q <= e; q++) {
+        const i = order[q], t = items[i].t;
+        const j = Math.min(Math.max(Math.floor((t - t0) / 60000), 0), s.points.length - 2);
+        const p = s.points[j], p2 = s.points[j + 1];
+        const z = p.z + (p2.z - p.z) * (t - p.t) / (p2.t - p.t);
+        let n = ex.findIndex(x => x.t > t);
+        const prev = ex[n - 1], next = ex[n];
+        out[i] = { z, ph: next ? (next.hw ? "прилив" : "отлив") : "" };
+      }
+      k = e + 1;
+      onProgress(k, order.length);
+      await new Promise(r => setTimeout(r, 0));
+    }
+    return out;
+  }
+
+  // --- вывод ---
+  const num = (v, dp) => v.toFixed(dp).replace(".", ",");
+  const hms = e => pad2(e.h) + ":" + pad2(e.mi) + (e.s ? ":" + pad2(e.s) : "");
+  const ID_RE = /^(id|№|no\.?|n|номер|num|number)$|^id[\s_.\-]/i;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  async function run() {
+    $("bErrs").hidden = true; $("bOut").innerHTML = ""; $("bSave").hidden = true;
+    const st = $("bStatus"); st.className = "status";
+    const rs = rows || splitText($("bText").value);
+    if (!rs.length) { st.className = "status err"; st.textContent = "Таблица пустая. Выберите файл или вставьте данные."; return; }
+    const det = detect(rs);
+    if (!det) { st.className = "status err"; st.textContent = "Не нашлись дата и время. Нужен формат 26.09.2026 14:30 или 2026-09-26 14:30 (в одном столбце или в двух)."; return; }
+    const offset = +tz.value;
+    const header = det.header ? rs[det.first - 1] : null;
+    const data = rs.slice(det.first);
+    const items = [], bad = [];
+    data.forEach((r, i) => {
+      const d = parseDateCell(r[det.dc] ?? "");
+      const tm = (det.tc >= 0 ? parseTime(r[det.tc] ?? "") : null) || (d && d.time);
+      if (!d || !tm) { bad.push(det.first + i + 1); return; }
+      items.push({ row: r, n: i + 1, when: pad2(d.d) + "." + pad2(d.m) + "." + d.y + " " + hms(tm), t: Date.UTC(d.y, d.m - 1, d.d, tm.h, tm.mi, tm.s) - offset * H });
+    });
+    if (!items.length) { st.className = "status err"; st.textContent = "Ни одна строка не распознана."; return; }
+    const res = await compute(items, (a, b) => { st.textContent = `Считаю… ${Math.round(a / b * 100)}%`; });
+
+    const idCol = header ? header.findIndex(h => ID_RE.test(String(h).trim())) : -1;
+    const outHead = ["ID", "Дата, время", "Высота, м", "Фаза"];
+    const outRows = items.map((it, i) => {
+      const id = idCol >= 0 ? String(it.row[idCol] ?? "") : String(it.n);
+      return [id, it.when, num(res[i].z, 3), res[i].ph];
+    });
+    result = { head: outHead, rows: outRows };
+
+    const show = outRows.slice(0, 12);
+    $("bOut").innerHTML = `<table><thead><tr>${outHead.map((h, c) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>` +
+      show.map(r => `<tr>${r.map((c, j) => `<td class="${j >= 2 ? "new" : ""}">${esc(c)}</td>`).join("")}</tr>`).join("") + `</tbody></table>`;
+    st.textContent = `Готово: ${outRows.length} ${plural(outRows.length, ["строка", "строки", "строк"])}` + (outRows.length > 12 ? " (показаны первые 12)" : "") + (bad.length ? `, не распознано ${bad.length}` : "") + ".";
+    if (bad.length) {
+      $("bErrs").innerHTML = `<li>Строки без даты или времени пропущены: ${bad.slice(0, 20).join(", ")}${bad.length > 20 ? " …" : ""}</li>`;
+      $("bErrs").hidden = false;
+    }
+    $("bSave").hidden = false;
+  }
+
+  const csvCell = c => /[;"\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c;
+  const toCSV = () => [result.head, ...result.rows].map(r => r.map(c => csvCell(String(c))).join(";")).join("\r\n");
+  $("bSave").addEventListener("click", () => {
+    const blob = new Blob(["﻿" + toCSV()], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "priliv_kartesh.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  // --- ввод ---
+  $("bText").addEventListener("input", () => { rows = null; $("bFileName").textContent = "CSV, TXT или Excel"; });
+  function loadXLSX() {
+    if (window.XLSX) return Promise.resolve();
+    return new Promise((ok, fail) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      s.onload = ok; s.onerror = () => fail(new Error("не загрузилась библиотека Excel (нужен интернет)"));
+      document.head.appendChild(s);
+    });
+  }
+  $("bFile").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const st = $("bStatus"); st.className = "status"; st.textContent = "";
+    $("bFileName").textContent = f.name;
+    try {
+      if (/\.xlsx?$/i.test(f.name)) {
+        st.textContent = "Читаю Excel…";
+        await loadXLSX();
+        const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" }).filter(r => r.some(c => c !== ""));
+        $("bText").value = rows.slice(0, 50).map(r => r.join("\t")).join("\n") + (rows.length > 50 ? `\n… всего строк: ${rows.length}` : "");
+        st.textContent = `Лист «${wb.SheetNames[0]}»: ${rows.length} ${plural(rows.length, ["строка", "строки", "строк"])}.`;
+      } else {
+        rows = null;
+        $("bText").value = await f.text();
+      }
+    } catch (err) {
+      rows = null; st.className = "status err"; st.textContent = "Не удалось прочитать файл: " + err.message;
+    }
+    e.target.value = "";
+  });
+  $("bRun").addEventListener("click", () => { run().catch(err => { $("bStatus").className = "status err"; $("bStatus").textContent = "Ошибка: " + err.message; }); });
+})();
 
 renderAll();
 setInterval(renderAll, 60000);
